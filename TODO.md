@@ -9,6 +9,14 @@ This will be our nonexhaustive todo list for InvisiProxy LTS v6.x.x and above. R
 - [ ] Implement multi-lang support!
 - [ ] Include default NGINX configuration for Docker Compose (will become the recommended method of hosting)
 
+#### Known Regressions
+- Wikipedia support broken
+- DuckDuckGo support broken
+- Bing will leak out of the respective stealth frame
+- Ultraviolet half broken
+- Need to swap Bare-Mux for ProxyTransports (to fix epoxy errors)
+- Clean epoxy errors if unreleated to ProxyTransports
+
 ## Proxy/Site Functionality
 - [ ] Add bookmarks menu (source wise already present pretty much)
 - [ ] Add Chii + ensuring users can access devtools while browsing - partial
