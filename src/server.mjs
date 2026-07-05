@@ -152,7 +152,6 @@ app.register(fastifyStatic, {
   'epoxy',
   'libcurl',
   'baremux',
-  'chii',
 ].forEach((prefix) => {
   app.register(fastifyStatic, {
     root: fileURLToPath(new URL('../views/dist/' + prefix, import.meta.url)),
@@ -233,7 +232,6 @@ if (config.disguiseFiles) {
       'libcurl',
       'baremux',
       'wisp',
-      'chii',
     ].map((dir) => getAltPrefix(dir, serverUrl.pathname).slice(1, -1)),
     exemptPages = ['login', 'test-shutdown', 'favicon.ico'];
   for (const [key, value] of Object.entries(externalPages))

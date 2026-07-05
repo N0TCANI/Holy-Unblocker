@@ -37,6 +37,9 @@ const libcurlPath = modPath('@mercuryworkshop/libcurl-transport/dist');
 const scramjetControllerPath = modPath(
   '@mercuryworkshop/scramjet-controller/dist'
 );
+const scramjetUtilsPath = modPath(
+  '@mercuryworkshop/scramjet-utils/dist'
+);
 
 // This constant is copied over from /src/server.mjs.
 const shutdown = fileURLToPath(new URL('./src/.shutdown', import.meta.url));
@@ -202,14 +205,20 @@ commands: for (let i = 2; i < process.argv.length; i++)
         ['uv', uvPath],
         ['scram', scramjetPath],
         ['scram', scramjetControllerPath],
-        ['chii', 'node_modules/chii'],
+        ['scram', scramjetUtilsPath],
       ];
       for (const [prefixName, srcPath] of compilePaths) {
+        const relSrc = srcPath.slice(srcPath.indexOf('node_modules'));
+        if (!existsSync(relSrc)) {
+          console.warn(`[Build] Skipping "${prefixName}": ${relSrc} not found.`);
+          continue;
+        }
+
         const prefix = prefixName + '/',
           prefixUrl = new URL('./views/dist-new/' + prefix, import.meta.url);
         if (!existsSync(prefixUrl)) mkdirSync(prefixUrl);
 
-        compile(srcPath.slice(srcPath.indexOf('node_modules')), '', prefix);
+        compile(relSrc, '', prefix);
       }
 
       // Minify the scripts and stylesheets upon compiling, if enabled in config.

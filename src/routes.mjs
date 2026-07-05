@@ -169,7 +169,6 @@ let altPaths = {
     roms: 'ms',
     uv: 'network',
     scram: 'worker',
-    chii: 'ani',
     epoxy: 'epoch',
     libcurl: 'unix',
     bareasmodule: 'utc',
