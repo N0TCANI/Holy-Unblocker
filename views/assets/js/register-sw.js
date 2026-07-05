@@ -1,6 +1,10 @@
 (() => {
-  const swRoutes = ['{{route}}{{/sw.js}}', '{{route}}{{/sw-blacklist.js}}'],
+  const swRoutes = {
+      sj: ['{{route}}{{/sw.js}}', '{{route}}{{/sw-blacklist.js}}'],
+      uv: ['{{route}}{{/uv/sw.js}}', '{{route}}{{/uv/sw-blacklist.js}}'],
+    },
     swScope = '{{route}}{{/}}',
+    uvSwScope = '{{route}}{{/uv/}}',
     swAllowedHostnames = ['localhost', '127.0.0.1'],
     wispUrl =
       (location.protocol === 'https:' ? 'wss' : 'ws') +
@@ -32,7 +36,20 @@
     return { url, options };
   };
 
-  const registerCombinedSW = async () => {
+  const swVariant = () => (readStorage('HideAds') !== false ? 1 : 0);
+
+  const unregisterStaleSWs = async () => {
+    const expected = [swRoutes.sj[swVariant()], swRoutes.uv[swVariant()]].map(
+      (sw) => new URL(sw, location.origin).pathname
+    );
+    for (const registration of await navigator.serviceWorker.getRegistrations()) {
+      const active = registration.active;
+      if (active && !expected.includes(new URL(active.scriptURL).pathname))
+        await registration.unregister();
+    }
+  };
+
+  const registerScramjetSW = async () => {
     if (!navigator.serviceWorker) {
       if (
         location.protocol !== 'https:' &&
@@ -42,17 +59,10 @@
       throw new Error("Your browser doesn't support service workers.");
     }
 
-    const sw = swRoutes[readStorage('HideAds') !== false ? 1 : 0];
-    const path = new URL(sw, location.origin).pathname;
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    for (const registration of registrations) {
-      const active = registration.active;
-      if (!active) continue;
-      if (new URL(active.scriptURL).pathname !== path)
-        await registration.unregister();
-    }
+    await unregisterStaleSWs();
 
-    console.log('Registering combined service worker:', sw);
+    const sw = swRoutes.sj[swVariant()];
+    console.log('Registering Scramjet service worker:', sw);
     const registration = await navigator.serviceWorker.register(sw, {
       scope: swScope,
     });
@@ -83,7 +93,33 @@
     const { url, options } = getTransportSelection();
     const mod = await import(url);
     const TransportClient = mod.default;
-    return new TransportClient(options);
+    const transport = new TransportClient(options);
+    if (typeof transport.init === 'function') await transport.init();
+    return transport;
+  };
+
+  const buildFramePlugins = () => {
+    if (typeof $scramjetUtils === 'undefined') return [];
+    const plugins = [new $scramjetUtils.HttpCachePlugin()];
+
+    const omniInput = document.getElementById('search-input');
+    plugins.push(
+      new $scramjetUtils.UrlWatcherPlugin((url) => {
+        if (omniInput && document.activeElement !== omniInput)
+          omniInput.value = url;
+      })
+    );
+
+    plugins.push(
+      new $scramjetUtils.CatchEscapedLinksPlugin((url) => {
+        try {
+          localStorage.setItem('{{hu-lts}}-frame-url', 'sj:' + url.href);
+        } catch (e) {}
+        return new URL(location.pathname + location.search, location.origin);
+      })
+    );
+
+    return plugins;
   };
 
   const initialize = async () => {
@@ -105,12 +141,25 @@
         getTransportSelection();
       console.log('Using proxy:', transportOptions.proxy);
       console.log('Transport mode:', transportUrl);
-      const baremux = new BareMux.BareMuxConnection(
-        '{{route}}{{/baremux/worker.js}}'
-      );
-      await baremux.setTransport(transportUrl, [transportOptions]);
 
-      const registration = await registerCombinedSW();
+      if (typeof BareMux !== 'undefined')
+        try {
+          const baremux = new BareMux.BareMuxConnection(
+            '{{route}}{{/baremux/worker.js}}'
+          );
+          await baremux.setTransport(transportUrl, [transportOptions]);
+          await navigator.serviceWorker.register(swRoutes.uv[swVariant()], {
+            scope: uvSwScope,
+          });
+          console.log('Ultraviolet service worker registered');
+        } catch (err) {
+          console.warn(
+            'BareMux setup failed',
+            err
+          );
+        }
+
+      const registration = await registerScramjetSW();
 
       const serviceworker =
         navigator.serviceWorker.controller ?? registration.active;
@@ -139,13 +188,28 @@
         },
       });
 
-      await controller.wait();
+      await Promise.race([
+        controller.wait(),
+        new Promise((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  'Scramjet controller handshake timed out'
+                )
+              ),
+            15000
+          )
+        ),
+      ]);
       console.log('Scramjet controller initialized');
 
       const visibleFrame = document.getElementById('frame');
       let frame;
       if (visibleFrame instanceof HTMLIFrameElement) {
-        frame = controller.createFrame(visibleFrame);
+        frame = controller.createFrame(visibleFrame, {
+          plugins: buildFramePlugins(),
+        });
       } else {
         const hidden = document.createElement('iframe');
         hidden.setAttribute('aria-hidden', 'true');
@@ -159,7 +223,12 @@
       window.$invisiScramjet = { controller, frame, ready: true };
       window.dispatchEvent(new Event('s-ready'));
     } catch (err) {
-      console.error('Initialization failed:', err);
+      console.error(
+        'Scramjet initialization failed',
+        err
+      );
+      window.$invisiScramjetError = err;
+      window.dispatchEvent(new CustomEvent('s-error', { detail: err }));
     }
   };
 

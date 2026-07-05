@@ -1,43 +1,27 @@
 importScripts('{{route}}{{/scram/controller.sw.js}}');
-importScripts('{{route}}{{/uv/uv.bundle.js}}');
-importScripts('{{route}}{{/uv/uv.config.js}}');
-importScripts(self['{{__uv$config}}'].sw || '{{route}}{{/uv/uv.sw.js}}');
-
-const uv = new UVServiceWorker();
 
 const SJ_CONTROLLER_PREFIX = '{{route}}{{/scram/network/}}';
 
-const blacklist = {};
-fetch('{{route}}{{/assets/txt/blacklist.txt}}').then((request) => {
-  request.text().then((textData) => {
-    textData
-      .split('\n')
-      .filter((domain) => domain.trim())
-      .forEach((domain) => {
-        const domainTld = domain.replace(/.+(?=\.\w)/, '');
-        if (!blacklist.hasOwnProperty(domainTld)) blacklist[domainTld] = [];
-        blacklist[domainTld].push(
-          encodeURIComponent(domain.slice(0, -domainTld.length))
-            .replace(/([()])/g, '\\$1')
-            .replace(/(\*\.)|\./g, (match, exp) =>
-              exp ? '(?:.+\\.)?' : '\\' + match
-            )
-        );
-      });
-
-    for (let [tld, domains] of Object.entries(blacklist))
-      blacklist[tld] = new RegExp(`^(?:${domains.join('|')})$`);
-    Object.freeze(blacklist);
-  });
-});
-
+const blacklist = new Set();
+fetch('{{route}}{{/assets/txt/blacklist.txt}}')
+  .then((response) => response.text())
+  .then((textData) => {
+    for (const line of textData.split('\n')) {
+      const domain = line.trim();
+      if (!domain || domain.charCodeAt(0) === 35 /* '#' */) continue;
+      blacklist.add(domain.toLowerCase());
+    }
+  })
+  .catch(() => {});
+  
 const isBlacklistedDomain = (domain) => {
-  if (!domain) return false;
-  const domainTld = domain.replace(/.+(?=\.\w)/, '');
-  return (
-    blacklist.hasOwnProperty(domainTld) &&
-    blacklist[domainTld].test(domain.slice(0, -domainTld.length))
-  );
+  if (!domain || blacklist.size === 0) return false;
+  let host = domain.toLowerCase();
+  while (host.includes('.')) {
+    if (blacklist.has(host)) return true;
+    host = host.slice(host.indexOf('.') + 1);
+  }
+  return false;
 };
 
 const targetHostnameForScramjet = (reqUrl) => {
@@ -62,20 +46,6 @@ self.addEventListener('fetch', (event) => {
         if (isBlacklistedDomain(hostname))
           return new Response(new Blob(), { status: 406 });
         return $scramjetController.route(event);
-      }
-
-      if (uv.route(event)) {
-        try {
-          const hostname = new URL(
-            uv.config.decodeUrl(
-              new URL(event.request.url).pathname.replace(uv.config.prefix, '')
-            )
-          ).hostname;
-          if (isBlacklistedDomain(hostname))
-            return new Response(new Blob(), { status: 406 });
-        } catch {
-        }
-        return await uv.fetch(event);
       }
 
       return fetch(event.request);

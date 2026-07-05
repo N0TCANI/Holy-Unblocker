@@ -249,7 +249,7 @@ const regExpEscape = /[-[\]{}()*+?.,\\^$#\s]/g,
     ),
     version: versionValue,
     cacheVal: crypto.getRandomValues(new Uint32Array(1))[0],
-    defaultSearch: '{{Google}}',
+    defaultSearch: '{{DuckDuckGo}}',
   }),
   // List of manual censors for unavoidable cases.
   manualCensors = Object.freeze({

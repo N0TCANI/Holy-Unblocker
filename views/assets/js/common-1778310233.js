@@ -389,7 +389,7 @@ const preparePage = async () => {
 
     heli: sjPreset('https://benjames171.itch.io/helo-storm'),
 
-    youtube: urlHandler(uvUrl('https://michael.team/yt/')),
+    youtube: urlHandler(uvUrl('https://youtube.com')),
 
     invidious: sjPreset('https://invidious.snopyta.org'),
 
